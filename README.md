@@ -4,6 +4,7 @@ The goal is to remotely monitor and control a Hoval Ultrasource heat pump in a v
 The controlled settings are desired room and water temperature.
 
 The user interface is a Google Sheet.
+See [this template](https://docs.google.com/spreadsheets/d/18_j9LVVCgPrRev3wAthHw0d9p4yPh64YbrP00OXtNOE/edit#gid=0).
 The agent uploads readings to the sheet and reads new desired settings from the sheet.
 Thus the agent doesn't need to be reachable from the internet.
 It only does outbound connections to the Google Sheet.
@@ -18,7 +19,8 @@ Configure a service account (https://cloud.google.com/iam/docs/creating-managing
 Allow it to authenticate using a private key (https://cloud.google.com/iam/docs/creating-managing-service-account-keys).
 Save the private key as `configs/hoval-ultrasource-service-key.json`.
 
-Give your service account's email write access to your Google Sheet.
+Copy the [template sheet](https://docs.google.com/spreadsheets/d/18_j9LVVCgPrRev3wAthHw0d9p4yPh64YbrP00OXtNOE/edit#gid=0) to create your own.
+Then give your service account's email write access to this new Google Sheet.
 
 ## Hoval Ultrasource CAN bus
 
