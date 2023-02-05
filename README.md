@@ -24,12 +24,13 @@ Then give your service account's email write access to this new Google Sheet.
 
 ## Hoval Ultrasource CAN bus
 
-The front service port on the Ultrasource is a Molex Mini-Fit Jr. connector.
+The [front service port on the Ultrasource](https://docs.google.com/document/d/1T8LvJBhFbQpsEJV_q2CthpmyqUR-UleQVFUQvEvvX_k/edit#) is a Molex Mini-Fit Jr. connector.
 The port is behind the panel that also hides the reset button.
 The CAN signal is on  the two leftmost pins (upper pin is CAN high, lower pin is CAN low).
 I use a [2-pin Molex 2451350210 cable](https://www.molex.com/molex/products/part-detail/cable_assemblies/2451350210).
 
 > If you want the 12V power too, you can use a [4-pin Molex 2451350420 cable](https://www.molex.com/molex/products/part-detail/cable_assemblies/2451350420).
+`GND` is the upper middle pin, `12V+` is the lower middle pin.
 I tried with a [LM2596 DC-DC Step-Down converter](https://www.bastelgarage.ch/5v-3a-lm2596-dc-dc-step-down-mit-usb).
 But attaching the Ultrasource’s `V+` to `IN+` and `GND` to `IN-` immediately reboots the Ultrasource’s display
 (but not the core controller).
