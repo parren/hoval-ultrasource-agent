@@ -51,8 +51,12 @@ func main() {
 	agentCfg := agent.Config{}
 	flag.BoolVar(&agentCfg.UpdateCurrentSettings, "update-current-settings", true,
 		"Enable updating current settings in sheet from CAN answers")
-	flag.BoolVar(&agentCfg.ApplyDesiredSettings, "apply-desired-settings", true,
+	flag.DurationVar(&agentCfg.CanPollingInterval, "can-bus-polling-interval", time.Minute,
+		"Interval between polls of the CAN bus (after connection dropped)")
+	flag.BoolVar(&agentCfg.ApplyDesiredSettings, "apply-desired-settings", false,
 		"Enable applying desired setting as CAN commands")
+	flag.BoolVar(&agentCfg.ApplyAutomaticSettings, "apply-automatic-settings", false,
+		"Enable automatic settings as sheet updates")
 	flag.BoolVar(&agentCfg.LogCurrentSettings, "log-current-settings", true,
 		"Log current settings to sheet as table")
 	flag.DurationVar(&agentCfg.SheetPollingInterval, "sheet-polling-interval", time.Minute,
