@@ -65,6 +65,9 @@ The `scripts/` folder has a bunch of useful bash scripts I use to configure the 
   * Enable the CAN bus and run the agent on boot.
   * Reboot when WiFi is lost ([context](https://weworkweplay.com/play/rebooting-the-raspberry-pi-when-it-loses-wireless-connection-wifi/)).
 
+The scripts expect your Google API credentials in a file called `google-api-credentials.json` and
+your Google Sheet ID in a file called `google-sheet-id.txt`.
+
 ## Tools
 
 The other Go programs were useful when reverse-engineering Hoval's protocol:
