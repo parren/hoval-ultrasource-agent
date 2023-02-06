@@ -238,6 +238,7 @@ func isWaterTempAtLeast(desiredCelsius float64, sheet gs.Client) int {
 	for _, s := range []gs.Setting{gs.ActualWaterTempHigher, gs.ActualWaterTempLower} {
 		v, ok := sheet.LatestValues()[s]
 		if !ok {
+			log.Printf("Failed to obtain water temp: %v\n", s)
 			continue
 		}
 		celsius, err := strconv.ParseFloat(v, 32)
