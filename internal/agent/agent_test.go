@@ -15,7 +15,7 @@ import (
 )
 
 const tick = time.Millisecond
-const step = tick * 2
+const step = tick * 3
 const timeout = time.Second * 4
 
 func TestSetNewValue(t *testing.T) {
@@ -259,7 +259,7 @@ func TestUpdateAndLogValues(t *testing.T) {
 	}
 }
 
-func TestAutoResetSalmonellaTemp(t *testing.T) {
+func TestAutoResetLegionellaTemp(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	defer time.Sleep(tick)
@@ -326,7 +326,44 @@ func TestAutoResetSalmonellaTemp(t *testing.T) {
 	}
 }
 
-func TestAutoResetSalmonellaTemp_ifWrongProgram(t *testing.T) {
+func TestAutoResetLegionellaTemp_ifOnlyOneHigher(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	defer time.Sleep(tick)
+
+	parser, can := initCan()
+	sheetClient, sheet := initSheet(ctx)
+	sheet.rows["water_program"] = fakeRow{"konstant", "konstant", "konstant", ""}
+	sheet.rows["water_temp"] = fakeRow{"60", "60", "60", ""}
+
+	agentCfg := Config{
+		UpdateCurrentSettings:  true,
+		ApplyDesiredSettings:   true,
+		ApplyAutomaticSettings: true,
+		CanPollingInterval:     tick,
+		SheetPollingInterval:   tick,
+	}
+	go RunForever(ctx, sheetClient, parser, can, nil, agentCfg)
+
+	can.simulateFrame(mustBuildFrame(t, us.IsAnswer, us.ActualWaterTempHigherId, float32(59.0)))
+	can.simulateFrame(mustBuildFrame(t, us.IsAnswer, us.ActualWaterTempLowerId, float32(62.0)))
+
+	time.Sleep(step)
+	if err := sheet.checkHave("actual_water_temp", "59"); err != nil {
+		t.Fatal(err)
+	}
+	if err := sheet.checkHave("actual_water_temp_lower", "62"); err != nil {
+		t.Fatal(err)
+	}
+	if err := sheet.checkRowStart("water_temp", fakeRow{"50", "50>", "60"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := can.checkXmit(us.IsSet, us.DesiredConstantWaterTempId, float32(50)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAutoResetLegionellaTemp_ifWrongProgram(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	defer time.Sleep(tick)
@@ -363,7 +400,7 @@ func TestAutoResetSalmonellaTemp_ifWrongProgram(t *testing.T) {
 	}
 }
 
-func TestAutoResetSalmonellaTemp_ifAlreadyLower(t *testing.T) {
+func TestAutoResetLegionellaTemp_ifAlreadyLower(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	defer time.Sleep(tick)

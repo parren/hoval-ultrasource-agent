@@ -198,17 +198,21 @@ func applyDesiredSetting(ctx context.Context, s Setting, vs gs.SettingValues, xm
 }
 
 const (
-	triggerWaterTempCelsius = 60
-	reducedWaterTempCelsius = "50"
+	triggerWaterTempCelsiusBoth = 60
+	triggerWaterTempCelsiusOne  = 62
+	reducedWaterTempCelsius     = "50"
 )
 
 func applyAutomaticWaterTemperatureSetting(ctx context.Context, sheet gs.Client, xmit us.Transmitter, cfg Config) {
 	log.Println("Polling for automatic water temperature adjustments")
 
-	if !isWaterTempAtLeast(triggerWaterTempCelsius, sheet) {
+	if isWaterTempAtLeast(triggerWaterTempCelsiusBoth, sheet) >= 2 {
+		log.Printf("Both water temps have reached limit of %v\n", triggerWaterTempCelsiusBoth)
+	} else if isWaterTempAtLeast(triggerWaterTempCelsiusOne, sheet) >= 1 {
+		log.Printf("One water temp has reached limit of %v\n", triggerWaterTempCelsiusOne)
+	} else {
 		return
 	}
-	log.Printf("Water temp has reached limit of %v\n", triggerWaterTempCelsius)
 
 	vs := sheet.ReadSettingValues(ctx, gs.WaterProgram)
 	if vs.Want != WaterProgramConstant {
@@ -220,7 +224,7 @@ func applyAutomaticWaterTemperatureSetting(ctx context.Context, sheet gs.Client,
 	celsius, err := strconv.ParseFloat(vs.Want, 32)
 	if err != nil {
 		log.Printf("Failed to parse desired water temp: %v\n", vs.Want)
-	} else if celsius < triggerWaterTempCelsius {
+	} else if celsius < triggerWaterTempCelsiusBoth {
 		log.Printf("Water temp is already set to %v\n", vs.Want)
 		return
 	}
@@ -229,22 +233,24 @@ func applyAutomaticWaterTemperatureSetting(ctx context.Context, sheet gs.Client,
 	sheet.WriteFacetValue(ctx, gs.FacetValue{Setting: gs.DesiredWaterTemp, Facet: gs.Want, Value: reducedWaterTempCelsius})
 }
 
-func isWaterTempAtLeast(desiredCelsius float64, sheet gs.Client) bool {
+func isWaterTempAtLeast(desiredCelsius float64, sheet gs.Client) int {
+	n := 0
 	for _, s := range []gs.Setting{gs.ActualWaterTempHigher, gs.ActualWaterTempLower} {
 		v, ok := sheet.LatestValues()[s]
 		if !ok {
-			return false
+			continue
 		}
 		celsius, err := strconv.ParseFloat(v, 32)
 		if err != nil {
 			log.Printf("Failed to parse water temp: %v: %v\n", s, v)
-			return false
+			continue
 		}
 		if celsius < desiredCelsius {
-			return false
+			continue
 		}
+		n += 1
 	}
-	return true
+	return n
 }
 
 func logCurrentSettingsForever(ctx context.Context, sheet gs.Client, cfg Config) {
