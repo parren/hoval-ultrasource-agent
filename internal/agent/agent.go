@@ -166,7 +166,11 @@ func applyDesiredSettings(ctx context.Context, sheet gs.Client, xmit us.Transmit
 	for _, s := range PushedSettings {
 		vs := sheet.ReadSettingValues(ctx, s.SheetSetting)
 		if vs.Want != vs.Have {
-			if vs.Sent != vs.Want && vs.Sent != vs.Want+">" {
+			if vs.Want == vs.Sent {
+				log.Printf("Picking up value changed externally: %v\n", vs)
+				sheet.WriteFacetValue(ctx, gs.FacetValue{Setting: s.SheetSetting, Facet: gs.Want, Value: vs.Have})
+				sheet.WriteFacetValue(ctx, gs.FacetValue{Setting: s.SheetSetting, Facet: gs.Sent, Value: vs.Have})
+			} else if vs.Sent != vs.Want+">" {
 				sheet.WriteFacetValue(ctx, gs.FacetValue{Setting: s.SheetSetting, Facet: gs.Sent, Value: vs.Want})
 				if xmit != nil {
 					applyDesiredSetting(ctx, s, vs, xmit, sheet)
