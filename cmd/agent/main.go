@@ -57,17 +57,23 @@ func main() {
 		"Enable applying desired setting as CAN commands")
 	flag.BoolVar(&agentCfg.ApplyAutomaticSettings, "apply-automatic-settings", false,
 		"Enable automatic settings as sheet updates")
-	flag.BoolVar(&agentCfg.LogCurrentSettings, "log-current-settings", true,
-		"Log current settings to sheet as table")
 	flag.DurationVar(&agentCfg.SheetPollingInterval, "sheet-polling-interval", time.Minute,
 		"Interval between polls of the sheet")
 	flag.DurationVar(&agentCfg.SettingsQueryInterval, "settings-query-interval", defaultLogInterval,
 		"Interval between batches of CAN queries of current settings")
 	flag.DurationVar(&agentCfg.SettingsQueryGap, "settings-query-gap", time.Second,
 		"Interval between individual CAN queries")
-	flag.DurationVar(&agentCfg.SettingsLogInterval, "settings-log-interval", defaultLogInterval,
-		"Interval between logging current settings to sheet")
-	flag.DurationVar(&agentCfg.SettingsLogDelay, "settings-log-delay", time.Minute,
+	flag.BoolVar(&agentCfg.LogCurrentSettingsToSheet, "log-to-sheet", false,
+		"Log current settings to sheet as table")
+	flag.DurationVar(&agentCfg.SettingsLogToSheetInterval, "log-to-sheet-interval", defaultLogInterval,
+		"Interval between logging current settings to sheet/files")
+	flag.BoolVar(&agentCfg.LogCurrentSettingsToFiles, "log-to-files", false,
+		"Log current settings to daily CSV files")
+	flag.DurationVar(&agentCfg.SettingsLogToFilesInterval, "log-to-files-interval", defaultLogInterval,
+		"Interval between logging current settings to sheet/files")
+	flag.StringVar(&agentCfg.LogStore.Dir, "log-to-files-dir", "",
+		"Base dir of CSV settings log files")
+	flag.DurationVar(&agentCfg.SettingsLogDelay, "log-delay", time.Minute,
 		"Delay of logging loop to query loop")
 	flag.Var(&temperatureSensors, "temperature-sensor",
 		"Temperature sensor in the format id:name")

@@ -3,6 +3,7 @@ module parren.ch/ultrasource
 go 1.19
 
 require (
+	github.com/karlseguin/expect v1.0.8
 	github.com/vishalkuo/bimap v0.0.0-20220726225509-e0b4f20de28b
 	go.einride.tech/can v0.5.3
 	google.golang.org/api v0.109.0
@@ -19,6 +20,7 @@ require (
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.2.1 // indirect
 	github.com/googleapis/gax-go/v2 v2.7.0 // indirect
+	github.com/wsxiaoys/terminal v0.0.0-20160513160801-0940f3fc43a0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/mod v0.7.0 // indirect
 	golang.org/x/net v0.4.0 // indirect

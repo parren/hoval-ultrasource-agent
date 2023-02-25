@@ -8,22 +8,26 @@ import (
 	"time"
 
 	gs "parren.ch/ultrasource/pkg/googlesheet"
+	"parren.ch/ultrasource/pkg/logfiles"
 	temp "parren.ch/ultrasource/pkg/temperature"
 	us "parren.ch/ultrasource/pkg/ultrasource"
 )
 
 type Config struct {
-	UpdateCurrentSettings  bool
-	ApplyDesiredSettings   bool
-	ApplyAutomaticSettings bool
-	LogCurrentSettings     bool
-	CanPollingInterval     time.Duration
-	SheetPollingInterval   time.Duration
-	SettingsQueryInterval  time.Duration
-	SettingsQueryGap       time.Duration
-	SettingsLogInterval    time.Duration
-	SettingsLogDelay       time.Duration
-	TemperatureSensors     map[string]string
+	UpdateCurrentSettings      bool
+	ApplyDesiredSettings       bool
+	ApplyAutomaticSettings     bool
+	LogCurrentSettingsToSheet  bool
+	LogCurrentSettingsToFiles  bool
+	CanPollingInterval         time.Duration
+	SheetPollingInterval       time.Duration
+	SettingsQueryInterval      time.Duration
+	SettingsQueryGap           time.Duration
+	SettingsLogToSheetInterval time.Duration
+	SettingsLogToFilesInterval time.Duration
+	SettingsLogDelay           time.Duration
+	TemperatureSensors         map[string]string
+	LogStore                   logfiles.LogFileStore
 }
 
 func RunForever(ctx context.Context, sheet gs.Client, parser *us.Parser, can us.Client, sensors temp.Client, cfg Config) {
@@ -41,8 +45,11 @@ func RunForever(ctx context.Context, sheet gs.Client, parser *us.Parser, can us.
 		if sensors != nil {
 			go updateSensorReadingsForever(ctx, sensors.TemperatureReadings(), sheet, cfg)
 		}
-		if cfg.LogCurrentSettings {
-			go logCurrentSettingsForever(ctx, sheet, cfg)
+		if cfg.LogCurrentSettingsToSheet {
+			go logCurrentSettingsToSheetForever(ctx, sheet, cfg)
+		}
+		if cfg.LogCurrentSettingsToFiles {
+			go logCurrentSettingsToFilesForever(ctx, sheet, cfg)
 		}
 	}
 	if cfg.ApplyDesiredSettings {
@@ -258,11 +265,10 @@ func isWaterTempAtLeast(desiredCelsius float64, sheet gs.Client) int {
 	return n
 }
 
-func logCurrentSettingsForever(ctx context.Context, sheet gs.Client, cfg Config) {
+func logCurrentSettingsToSheetForever(ctx context.Context, sheet gs.Client, cfg Config) {
 	time.Sleep(cfg.SettingsLogDelay)
-	runThenTick(ctx, cfg.SettingsLogInterval, func() {
-		log.Println("Logging current settings")
-
+	runThenTick(ctx, cfg.SettingsLogToSheetInterval, func() {
+		log.Println("Logging current settings to sheet")
 		header := []interface{}{"Timestamp"}
 		row := []interface{}{gs.FormatTimestamp(time.Now())}
 		for _, s := range ReportedSettings {
@@ -278,6 +284,30 @@ func logCurrentSettingsForever(ctx context.Context, sheet gs.Client, cfg Config)
 		}
 		sheet.Write(ctx, "Log!A1", [][]interface{}{header})
 		sheet.AppendOverwritingRows(ctx, "Log!A1", [][]interface{}{row})
+	})
+}
+
+func logCurrentSettingsToFilesForever(ctx context.Context, sheet gs.Client, cfg Config) {
+	time.Sleep(cfg.SettingsLogDelay)
+	runThenTick(ctx, cfg.SettingsLogToFilesInterval, func() {
+		log.Println("Logging current settings to file")
+		ts := time.Now()
+		header := []interface{}{"Timestamp"}
+		row := []interface{}{logfiles.FormatTimestamp(ts)}
+		for _, s := range ReportedSettings {
+			header = append(header, s.SheetSetting)
+			v := sheet.LatestValues()[s.SheetSetting]
+			row = append(row, v)
+		}
+		for _, name := range cfg.TemperatureSensors {
+			s := gs.Setting(name)
+			header = append(header, s)
+			v := sheet.LatestValues()[s]
+			row = append(row, v)
+		}
+		if err := cfg.LogStore.Write(ts, header, row); err != nil {
+			log.Printf("Failed to log row: %v\n", err)
+		}
 	})
 }
 
