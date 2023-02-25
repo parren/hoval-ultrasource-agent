@@ -158,11 +158,11 @@ func TestUpdateAndLogValues(t *testing.T) {
 	const logInterval = step * 15
 
 	agentCfg := Config{
-		UpdateCurrentSettings: true,
-		LogCurrentSettings:    true,
-		CanPollingInterval:    tick,
-		SettingsLogInterval:   logInterval,
-		SettingsLogDelay:      logDelay,
+		UpdateCurrentSettings:      true,
+		LogCurrentSettingsToSheet:  true,
+		CanPollingInterval:         tick,
+		SettingsLogToSheetInterval: logInterval,
+		SettingsLogDelay:           logDelay,
 	}
 	go RunForever(ctx, sheetClient, parser, can, nil, agentCfg)
 	start := time.Now()
@@ -371,7 +371,7 @@ func TestAutoResetLegionellaTemp_ifWrongProgram(t *testing.T) {
 	parser, can := initCan()
 	sheetClient, sheet := initSheet(ctx)
 	sheet.rows["water_program"] = fakeRow{"standby", "standby", "standby", ""}
-	sheet.rows["water_temp"] = fakeRow{"60", "60", "10", ""}
+	sheet.rows["water_temp"] = fakeRow{"60", "60", "60", ""}
 
 	agentCfg := Config{
 		UpdateCurrentSettings:  true,
@@ -392,7 +392,7 @@ func TestAutoResetLegionellaTemp_ifWrongProgram(t *testing.T) {
 	if err := sheet.checkHave("actual_water_temp_lower", "60"); err != nil {
 		t.Fatal(err)
 	}
-	if err := sheet.checkRowStart("water_temp", fakeRow{"60", "60", "10"}); err != nil {
+	if err := sheet.checkRowStart("water_temp", fakeRow{"60", "60", "60"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := can.checkNotXmit(us.IsSet, us.DesiredConstantWaterTempId, float32(50)); err != nil {
