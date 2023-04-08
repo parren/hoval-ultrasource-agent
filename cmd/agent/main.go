@@ -33,6 +33,9 @@ var (
 	temperatureSensors flagMap = make(flagMap)
 	enableCanBus               = true
 	enableOnewireBus           = true
+
+	heartbeatDelay = time.Minute
+	heartbeatFile  = ""
 )
 
 func main() {
@@ -83,6 +86,11 @@ func main() {
 	flag.BoolVar(&enableOnewireBus, "enable-onewire-bus", enableOnewireBus,
 		"Enable 1-wire bus")
 
+	flag.DurationVar(&heartbeatDelay, "heartbeat-delay", time.Minute,
+		"Delay between touching --heartbeat-file")
+	flag.StringVar(&heartbeatFile, "heartbeat-file", "",
+		"File to touch every --heartbeat-delay")
+
 	flag.Parse()
 	if len(sheetCfg.SheetId) == 0 || len(sheetCfg.CredentialsFile) == 0 {
 		fmt.Println("Usage:")
@@ -107,5 +115,24 @@ func main() {
 	if enableOnewireBus {
 		sensors = temperature.NewClient()
 	}
+
+	if heartbeatFile != "" {
+		go func() {
+			for {
+				fmt.Printf("Touching %s\n", heartbeatFile)
+				touch(heartbeatFile)
+				time.Sleep(heartbeatDelay)
+			}
+		}()
+	}
+
 	agent.RunForever(ctx, sheet, parser, can, sensors, agentCfg)
+}
+
+func touch(fileName string) {
+	currentTime := time.Now().Local()
+	err := os.Chtimes(fileName, currentTime, currentTime)
+	if err != nil {
+		fmt.Println(err)
+	}
 }

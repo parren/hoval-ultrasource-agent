@@ -1,7 +1,7 @@
 #! /bin/bash
 # https://weworkweplay.com/play/rebooting-the-raspberry-pi-when-it-loses-wireless-connection-wifi/
 #
-# To install:
+# To install to run every minute:
 # $ crontab -e
 # then add:
 # */1 * * * * /home/peo/ultrasource/reboot-when-no-wifi.sh >> /dev/null 2>&1
