@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sort"
 	"strconv"
 	"time"
 
@@ -31,6 +32,8 @@ type Config struct {
 }
 
 func RunForever(ctx context.Context, sheet gs.Client, parser *us.Parser, can us.Client, sensors temp.Client, cfg Config) {
+	sensorNames := sortSensorNames(cfg)
+
 	answerMsgs := make(chan settingAnswerMessage, 100)
 	defer close(answerMsgs)
 	if cfg.UpdateCurrentSettings {
@@ -46,10 +49,10 @@ func RunForever(ctx context.Context, sheet gs.Client, parser *us.Parser, can us.
 			go updateSensorReadingsForever(ctx, sensors.TemperatureReadings(), sheet, cfg)
 		}
 		if cfg.LogCurrentSettingsToSheet {
-			go logCurrentSettingsToSheetForever(ctx, sheet, cfg)
+			go logCurrentSettingsToSheetForever(ctx, sheet, cfg, sensorNames)
 		}
 		if cfg.LogCurrentSettingsToFiles {
-			go logCurrentSettingsToFilesForever(ctx, sheet, cfg)
+			go logCurrentSettingsToFilesForever(ctx, sheet, cfg, sensorNames)
 		}
 	}
 	if cfg.ApplyDesiredSettings {
@@ -57,6 +60,15 @@ func RunForever(ctx context.Context, sheet gs.Client, parser *us.Parser, can us.
 		go updateDesiredSettingsForever(ctx, sheet, can, cfg)
 	}
 	<-ctx.Done()
+}
+
+func sortSensorNames(cfg Config) []string {
+	ns := make([]string, 0, len(cfg.TemperatureSensors))
+	for _, n := range cfg.TemperatureSensors {
+		ns = append(ns, n)
+	}
+	sort.Strings(ns)
+	return ns
 }
 
 type settingAnswerMessage struct {
@@ -265,50 +277,44 @@ func isWaterTempAtLeast(desiredCelsius float64, sheet gs.Client) int {
 	return n
 }
 
-func logCurrentSettingsToSheetForever(ctx context.Context, sheet gs.Client, cfg Config) {
+func logCurrentSettingsToSheetForever(ctx context.Context, sheet gs.Client, cfg Config, sensorNames []string) {
 	time.Sleep(cfg.SettingsLogDelay)
 	runThenTick(ctx, cfg.SettingsLogToSheetInterval, func() {
 		log.Println("Logging current settings to sheet")
 		header := []interface{}{"Timestamp"}
 		row := []interface{}{gs.FormatTimestamp(time.Now())}
-		for _, s := range ReportedSettings {
-			header = append(header, s.SheetSetting)
-			v := sheet.LatestValues()[s.SheetSetting]
-			row = append(row, v)
-		}
-		for _, name := range cfg.TemperatureSensors {
-			s := gs.Setting(name)
-			header = append(header, s)
-			v := sheet.LatestValues()[s]
-			row = append(row, v)
-		}
+		appendValuesToLogRow(sheet, cfg, sensorNames, &header, &row)
 		sheet.Write(ctx, "Log!A1", [][]interface{}{header})
 		sheet.AppendOverwritingRows(ctx, "Log!A1", [][]interface{}{row})
 	})
 }
 
-func logCurrentSettingsToFilesForever(ctx context.Context, sheet gs.Client, cfg Config) {
+func logCurrentSettingsToFilesForever(ctx context.Context, sheet gs.Client, cfg Config, sensorNames []string) {
 	time.Sleep(cfg.SettingsLogDelay)
 	runThenTick(ctx, cfg.SettingsLogToFilesInterval, func() {
 		log.Println("Logging current settings to file")
 		ts := time.Now()
 		header := []interface{}{"Timestamp"}
 		row := []interface{}{logfiles.FormatTimestamp(ts)}
-		for _, s := range ReportedSettings {
-			header = append(header, s.SheetSetting)
-			v := sheet.LatestValues()[s.SheetSetting]
-			row = append(row, v)
-		}
-		for _, name := range cfg.TemperatureSensors {
-			s := gs.Setting(name)
-			header = append(header, s)
-			v := sheet.LatestValues()[s]
-			row = append(row, v)
-		}
+		appendValuesToLogRow(sheet, cfg, sensorNames, &header, &row)
 		if err := cfg.LogStore.Write(ts, header, row); err != nil {
 			log.Printf("Failed to log row: %v\n", err)
 		}
 	})
+}
+
+func appendValuesToLogRow(sheet gs.Client, cfg Config, sensorNames []string, header, row *[]interface{}) {
+	for _, s := range ReportedSettings {
+		*header = append(*header, s.SheetSetting)
+		v := sheet.LatestValues()[s.SheetSetting]
+		*row = append(*row, v)
+	}
+	for _, name := range sensorNames {
+		*header = append(*header, name)
+		s := gs.Setting(name)
+		v := sheet.LatestValues()[s]
+		*row = append(*row, v)
+	}
 }
 
 func runThenTick(ctx context.Context, interval time.Duration, body func()) {
