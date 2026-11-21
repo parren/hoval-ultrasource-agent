@@ -100,6 +100,28 @@ var ReportedSettings = []Setting{
 	{SheetSetting: "active_error", valueId: us.ActiveError1, converter: &activeError},
 }
 
+func (s Setting) ValueId() us.ValueId {
+	return s.valueId
+}
+
+func SettingByName(name string) (Setting, bool) {
+	for _, s := range ReportedSettings {
+		if string(s.SheetSetting) == name {
+			return s, true
+		}
+	}
+	return Setting{}, false
+}
+
+func PushedSettingByName(name string) (Setting, bool) {
+	for _, s := range PushedSettings {
+		if string(s.SheetSetting) == name {
+			return s, true
+		}
+	}
+	return Setting{}, false
+}
+
 func (s Setting) ParseMessage(m us.Message) (v string, ok bool) {
 	if s.converter == nil {
 		return fmt.Sprintf("%v", m.Value), true

@@ -1,0 +1,18 @@
+[Unit]
+Description=Hoval Ultrasource Agent
+After=network.target systemd-networkd.service sys-subsystem-net-devices-can0.device
+Wants=sys-subsystem-net-devices-can0.device
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/ultrasource
+ExecStart=/home/pi/ultrasource/ultrasource agent \
+  --google-sheet-id=YOUR_SHEET_ID \
+  --apply-desired-settings=true \
+  --apply-automatic-settings=true
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

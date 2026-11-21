@@ -49,30 +49,24 @@ This code is heavily inspired by https://github.com/zittix/Hoval-GW and https://
 
 ## Agent Code
 
-  * The main entry point is `cmd/agent/main.go`. It defines all the flags.
-  * The actual functionality is in `internal/agent.go`. It has an `agent_test.go` for the main scenarios.
+  * The main entry point is `cmd/ultrasource/main.go` (`agent`, `monitor`, `analyze`, `query`, `set`).
+  * The core agent package is `pkg/agent` (`agent.go`, `settings.go`, `agent_test.go`).
 
-To cross-compile the agent on a regular Linux machine for the Raspberry's ARM chip, use something like:
+To cross-compile the CLI on a regular Linux machine for the Raspberry's ARM chip, use something like:
 
 ```shell
-$ env GOOS=linux GOARCH=arm GOARM=5 go build -o raspi-agent cmd/agent/main.go
+$ env GOOS=linux GOARCH=arm GOARM=5 go build -o raspi-ultrasource ./cmd/ultrasource
 ```
 
-## Scripts
+## Deployment
 
-The `scripts/` folder has a bunch of useful bash scripts I use to configure the Raspberry Pi to:
-
-  * Enable the CAN bus and run the agent on boot.
-  * Reboot when WiFi is lost ([context](https://weworkweplay.com/play/rebooting-the-raspberry-pi-when-it-loses-wireless-connection-wifi/)).
-
-The scripts expect your Google API credentials in a file called `google-api-credentials.json` and
-your Google Sheet ID in a file called `google-sheet-id.txt`.
+The `deploy/` folder contains template `systemd` files (`80-can.network` for 50 kbps CAN bus setup and `ultrasource-agent.service`).
+The agent expects your Google API credentials in a file called `google-api-credentials.json` (or `--google-api-credentials-file`) and your Google Sheet ID via `--google-sheet-id`.
 
 ## Tools
 
-The other Go programs were useful when reverse-engineering Hoval's protocol:
+Subcommands useful for debugging or reverse-engineering Hoval's protocol:
 
-  * `cmd/analyze/main.go` can be run over
-    [`candump`](https://manpages.debian.org/testing/can-utils/candump.1.en.html) output.
-  * `cmd/logger/main.go` can be run to monitor online what happens on the bus as you
-    modify settings directly on the pump's control screen.
+  * `ultrasource analyze --log <candump.log>` parses [`candump`](https://manpages.debian.org/testing/can-utils/candump.1.en.html) output.
+  * `ultrasource monitor` queries and prints live answers from the CAN bus.
+  * `ultrasource query <setting>` and `ultrasource set <setting> <value>` send single CAN frames.
