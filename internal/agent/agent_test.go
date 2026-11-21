@@ -518,9 +518,26 @@ func (s *fakeSheet) Read(ctx context.Context, sheetId, rng string) ([][]interfac
 	return [][]interface{}{s.resolve(rng)}, nil
 }
 
+func (s *fakeSheet) BatchRead(ctx context.Context, sheetId string, ranges []string) ([][][]interface{}, error) {
+	res := make([][][]interface{}, len(ranges))
+	for i, rng := range ranges {
+		res[i] = [][]interface{}{s.resolve(rng)}
+	}
+	return res, nil
+}
+
 func (s *fakeSheet) Write(ctx context.Context, sheetId, rng string, vals [][]interface{}) error {
 	r := s.resolve(rng)
 	copy(r, vals[0])
+	log.Printf("    %v\n", s.rows)
+	return nil
+}
+
+func (s *fakeSheet) BatchWrite(ctx context.Context, sheetId string, updates []gs.RangeValues) error {
+	for _, u := range updates {
+		r := s.resolve(u.Range)
+		copy(r, u.Values[0])
+	}
 	log.Printf("    %v\n", s.rows)
 	return nil
 }

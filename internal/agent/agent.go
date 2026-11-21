@@ -103,6 +103,7 @@ func queryCurrentSettingsForever(ctx context.Context, xmit us.Transmitter, senso
 				fv := gs.FacetValue{Setting: gs.Setting(name), Facet: gs.Have, Value: fmt.Sprintf("%v", t)}
 				sheet.RefreshFluctuatingHaveValue(ctx, fv)
 			}
+			_ = sheet.Flush(ctx)
 		}
 	})
 }
@@ -155,6 +156,7 @@ func updateCurrentSettingsForever(ctx context.Context, msgs <-chan settingAnswer
 			} else {
 				sheet.RefreshFluctuatingHaveValue(ctx, fv)
 			}
+			_ = sheet.Flush(ctx)
 			if m.set.isDesired {
 				vs, err := sheet.ReadSettingValues(ctx, s)
 				if err != nil {

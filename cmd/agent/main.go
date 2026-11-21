@@ -107,7 +107,11 @@ func main() {
 	log.Printf("1-wire sensors: %v", agentCfg.TemperatureSensors)
 
 	ctx := context.Background()
-	sheet := googlesheet.NewClient(ctx, googlesheet.NewServiceClient(ctx, sheetCfg), sheetCfg)
+	sheetSrv, err := googlesheet.NewServiceClient(ctx, sheetCfg)
+	if err != nil {
+		log.Fatalf("Unable to retrieve Google Sheets client: %v", err)
+	}
+	sheet := googlesheet.NewClient(ctx, sheetSrv, sheetCfg)
 	var parser *ultrasource.Parser
 	var can ultrasource.Client
 	if enableCanBus {
