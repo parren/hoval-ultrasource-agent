@@ -76,7 +76,7 @@ var ReportedSettings = []Setting{
 
 	{SheetSetting: "resulting_room_temp", valueId: us.DesiredRoomTempId},
 	{SheetSetting: "heating_temp", valueId: us.DesiredHeatingTempId},
-	{SheetSetting: "actual_heating_temp", valueId: us.ActualHeaterTempId},
+	{SheetSetting: "actual_heating_temp", valueId: us.ActualHeatingTempId},
 
 	{SheetSetting: "resulting_water_temp", valueId: us.DesiredWaterTempId},
 	{SheetSetting: gs.ActualWaterTempHigher, valueId: us.ActualWaterTempHigherId},
@@ -96,6 +96,8 @@ var ReportedSettings = []Setting{
 	{SheetSetting: "heat_energy", valueId: us.ActualHeaterEnergyId},
 	{SheetSetting: "grid_energy", valueId: us.ActualGridEnergyId},
 	{SheetSetting: "heater_mode", valueId: us.HeaterModeId},
+
+	{SheetSetting: "active_error", valueId: us.ActiveError1, converter: &activeError},
 }
 
 func (s Setting) ParseMessage(m us.Message) (v string, ok bool) {
@@ -128,6 +130,25 @@ var celsius = converter{
 		f, err = us.BuildFrame(us.IsSet, vid, float32(celsius))
 		return
 	}}
+
+var activeError = converter{
+	ParseMessage: func(m us.Message) (v string, ok bool) {
+		msg, ok := m.Value.(us.ActiveError)
+		if !ok {
+			return "", false
+		}
+		if msg.Msg.ErrorCode == us.NoError {
+			return "", true
+		}
+		if msg.ErrorCodeText == "" {
+			return fmt.Sprintf("%v", msg.Msg), true
+		}
+		return fmt.Sprintf("Art: %s; Fehler: %s; Quelle: %s",
+			msg.ErrorTypeText,
+			msg.ErrorCodeText,
+			msg.SourceText), true
+	},
+}
 
 func strMap(valueByValue map[string]string) *converter {
 	inverse := make(map[string]string, len(valueByValue))

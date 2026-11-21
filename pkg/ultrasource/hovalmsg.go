@@ -1,8 +1,10 @@
 package ultrasource
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
+	"math"
 	"time"
 
 	"go.einride.tech/can"
@@ -98,6 +100,9 @@ var (
 
 	vU8 = valueConverter{
 		toValue: func(b []byte) (interface{}, error) {
+			if len(b) < 1 {
+				return nil, fmt.Errorf("short u8 payload: %d bytes", len(b))
+			}
 			return b[0], nil
 		},
 		appendValue: func(bytes []byte, v interface{}) ([]byte, error) {
@@ -106,28 +111,62 @@ var (
 
 	vTenthsDegreesCelsius = valueConverter{
 		toValue: func(b []byte) (interface{}, error) {
+			if len(b) < 2 {
+				return nil, fmt.Errorf("short temperature payload: %d bytes", len(b))
+			}
 			return float32(int16(binary.BigEndian.Uint16(b))) / 10, nil
 		},
 		appendValue: func(bytes []byte, v interface{}) ([]byte, error) {
 			f := v.(float32)
-			i := int16(f * 10)
+			i := int16(math.Round(float64(f) * 10))
 			u := uint16(i)
 			return binary.BigEndian.AppendUint16(bytes, u), nil
 		}}
 
 	vPercent = valueConverter{
 		toValue: func(b []byte) (interface{}, error) {
+			if len(b) < 1 {
+				return nil, fmt.Errorf("short percent payload: %d bytes", len(b))
+			}
 			return float32(b[0]) / 100, nil
 		}}
 
 	vHours = valueConverter{
 		toValue: func(b []byte) (interface{}, error) {
+			if len(b) < 4 {
+				return nil, fmt.Errorf("short hours payload: %d bytes", len(b))
+			}
 			return int(binary.BigEndian.Uint32(b)), nil
 		}}
 
 	vKiloWatts = valueConverter{
 		toValue: func(b []byte) (interface{}, error) {
+			if len(b) < 2 {
+				return nil, fmt.Errorf("short kilowatts payload: %d bytes", len(b))
+			}
 			return float32(binary.BigEndian.Uint16(b)) / 100, nil
+		}}
+
+	vActiveError = valueConverter{
+		toValue: func(b []byte) (interface{}, error) {
+			var res ActiveError
+			buffer := bytes.NewBuffer(b)
+			err := binary.Read(buffer, binary.BigEndian, &res.Msg)
+			if err != nil {
+				return nil, err
+			}
+
+			if s, ok := Sources[res.Msg.Source]; ok {
+				res.SourceText = s
+			}
+			if s, ok := ErrorTypes[res.Msg.ErrorType]; ok {
+				res.ErrorTypeText = s
+			}
+			if s, ok := ErrorCodes[res.Msg.ErrorCode]; ok {
+				res.ErrorCodeText = s
+			}
+
+			return res, nil
 		}}
 )
 
@@ -141,6 +180,8 @@ func listParser(options []string) func(b []byte) (interface{}, error) {
 			i = int(binary.LittleEndian.Uint16(b))
 		case 4:
 			i = int(binary.LittleEndian.Uint32(b))
+		default:
+			return nil, fmt.Errorf("unexpected list payload length: %d", len(b))
 		}
 		if i >= len(options) {
 			return fmt.Sprintf("?UNKNOWN(%v)", i), nil
@@ -222,6 +263,9 @@ type unfinished struct {
 }
 
 func (p *Parser) ParseFrame(f can.Frame) (m *Message, err error) {
+	if int(f.Length) > len(f.Data) {
+		return nil, fmt.Errorf("invalid frame length %d in %v", f.Length, f)
+	}
 	idBytes := [4]byte{}
 	binary.BigEndian.PutUint32(idBytes[:], f.ID)
 	frameType := idBytes[0]
@@ -257,6 +301,10 @@ func (p *Parser) ParseFrame(f can.Frame) (m *Message, err error) {
 		}
 	default:
 		// Continuation of message
+		if f.Length < 1 {
+			err = fmt.Errorf("length<1 in continuation %v", f)
+			return
+		}
 		key := sequenceKey{device: d, id: f.Data[0]}
 		unf, ok := p.pending[key]
 		if !ok {
@@ -272,6 +320,10 @@ func (p *Parser) ParseFrame(f can.Frame) (m *Message, err error) {
 		if unf.remainingFrames == 0 {
 			delete(p.pending, key)
 			data := unf.data
+			if len(data) < 2 {
+				err = fmt.Errorf("short multi-frame payload (%d bytes) in %v", len(data), f)
+				return
+			}
 			crc := binary.BigEndian.Uint16(data[len(data)-2:])
 			data = data[:len(data)-2]
 			if p.cfg.LogDetails {
@@ -284,11 +336,17 @@ func (p *Parser) ParseFrame(f can.Frame) (m *Message, err error) {
 }
 
 func (p Parser) parseMessage(dev Device, raw []byte) (m *Message, err error) {
+	if len(raw) < 1 {
+		return nil, fmt.Errorf("empty message payload")
+	}
 	t := MessageType(raw[0])
 	td := messageTypeDatas[t]
 	data := raw[1:]
 	var vid ValueId
 	if !td.noValueId {
+		if len(data) < 4 {
+			return nil, fmt.Errorf("short message header (%d bytes) for type %v", len(data), t)
+		}
 		vid.Group = FunctionGroup(data[0])
 		vid.Number = FunctionNumber(data[1])
 		vid.Id = DataPointId(binary.BigEndian.Uint16(data[2:4]))
@@ -355,7 +413,7 @@ func (t MessageType) String() string {
 func (d Device) String() string {
 	n, ok := deviceNames[d]
 	if !ok {
-		return fmt.Sprintf("?dev{type=%v, id=%v}}", d.Type, d.Id)
+		return fmt.Sprintf("?dev{type=%v, id=%v}", d.Type, d.Id)
 	}
 	return n
 }

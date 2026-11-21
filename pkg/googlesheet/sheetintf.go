@@ -12,14 +12,14 @@ import (
 
 type (
 	Client interface {
-		ReadSettingValues(ctx context.Context, setting Setting) SettingValues
-		ReadFacetValue(ctx context.Context, setting Setting, facet Facet) string
+		ReadSettingValues(ctx context.Context, setting Setting) (SettingValues, error)
+		ReadFacetValue(ctx context.Context, setting Setting, facet Facet) (string, error)
 		WriteFacetValue(ctx context.Context, v FacetValue)
 		RefreshFacetValue(ctx context.Context, v FacetValue)
 		InvalidateSettingValue(s Setting)
 		RefreshFluctuatingHaveValue(ctx context.Context, v FacetValue)
-		Write(ctx context.Context, rng string, values [][]interface{})
-		AppendOverwritingRows(ctx context.Context, rng string, values [][]interface{})
+		Write(ctx context.Context, rng string, values [][]interface{}) error
+		AppendOverwritingRows(ctx context.Context, rng string, values [][]interface{}) error
 		LatestValues() map[Setting]string
 	}
 
@@ -78,9 +78,9 @@ func NewClient(ctx context.Context, srv ServiceClient, cfg Config) Client {
 
 type (
 	ServiceClient interface {
-		Read(ctx context.Context, sheetId, rng string) [][]interface{}
-		Write(ctx context.Context, sheetId, rng string, vals [][]interface{})
-		Append(ctx context.Context, sheetId, rng string, vals [][]interface{})
+		Read(ctx context.Context, sheetId, rng string) ([][]interface{}, error)
+		Write(ctx context.Context, sheetId, rng string, vals [][]interface{}) error
+		Append(ctx context.Context, sheetId, rng string, vals [][]interface{}) error
 	}
 
 	serviceImpl struct {
@@ -100,35 +100,53 @@ type (
 	}
 )
 
-func (c *clientImpl) ReadSettingValues(ctx context.Context, setting Setting) SettingValues {
+func (c *clientImpl) ReadSettingValues(ctx context.Context, setting Setting) (SettingValues, error) {
 	rng := string(setting)
-	rows := c.read(ctx, rng)
+	rows, err := c.read(ctx, rng)
+	if err != nil {
+		return SettingValues{}, err
+	}
 	log.Printf("Read %v values: %v", rng, rows)
-	row := rows[0]
 	result := SettingValues{Setting: setting}
-	result.Want = fmt.Sprintf("%v", row[0])
-	result.Sent = fmt.Sprintf("%v", row[1])
-	result.Have = fmt.Sprintf("%v", row[2])
-	return result
+	if len(rows) == 0 {
+		return result, nil
+	}
+	row := rows[0]
+	if len(row) > 0 {
+		result.Want = fmt.Sprintf("%v", row[0])
+	}
+	if len(row) > 1 {
+		result.Sent = fmt.Sprintf("%v", row[1])
+	}
+	if len(row) > 2 {
+		result.Have = fmt.Sprintf("%v", row[2])
+	}
+	return result, nil
 }
 
-func (c *clientImpl) ReadFacetValue(ctx context.Context, setting Setting, facet Facet) string {
+func (c *clientImpl) ReadFacetValue(ctx context.Context, setting Setting, facet Facet) (string, error) {
 	rng := facetRange(setting, facet)
-	rows := c.read(ctx, rng)
+	rows, err := c.read(ctx, rng)
+	if err != nil {
+		return "", err
+	}
 	log.Printf("Read %v values: %v", rng, rows)
 	if len(rows) < 1 || len(rows[0]) < 1 {
-		return ""
+		return "", nil
 	}
-	return fmt.Sprintf("%v", rows[0][0])
+	return fmt.Sprintf("%v", rows[0][0]), nil
 }
 
 func (c *clientImpl) WriteFacetValue(ctx context.Context, v FacetValue) {
-	c.Write(ctx, facetRange(v.Setting, v.Facet), [][]interface{}{{v.Value}})
+	_ = c.Write(ctx, facetRange(v.Setting, v.Facet), [][]interface{}{{v.Value}})
 }
 
 func (c *clientImpl) RefreshFacetValue(ctx context.Context, v FacetValue) {
 	c.latestValues[v.Setting] = v.Value
-	curr := c.ReadFacetValue(ctx, v.Setting, v.Facet)
+	curr, err := c.ReadFacetValue(ctx, v.Setting, v.Facet)
+	if err != nil {
+		return
+	}
 	if curr != v.Value {
 		log.Printf("Updating current setting %v\n", v)
 		c.WriteFacetValue(ctx, v)
@@ -149,14 +167,19 @@ func (c *clientImpl) RefreshFluctuatingHaveValue(ctx context.Context, v FacetVal
 			return
 		}
 	}
-	curr := c.ReadFacetValue(ctx, v.Setting, HaveWithDate)
+	curr, err := c.ReadFacetValue(ctx, v.Setting, HaveWithDate)
+	if err != nil {
+		return
+	}
 	if curr == v.Value {
 		return
 	}
 	log.Printf("Updating current setting %v\n", v)
 	timeStamp := time.Now()
 	rangeName := fmt.Sprintf("%v_%v", v.Setting, HaveWithDate)
-	c.Write(ctx, rangeName, [][]interface{}{{v.Value, FormatTimestamp(timeStamp)}})
+	if err := c.Write(ctx, rangeName, [][]interface{}{{v.Value, FormatTimestamp(timeStamp)}}); err != nil {
+		return
+	}
 	c.datedValues[v.Setting] = datedValue{Value: v.Value, LastUpdateAt: timeStamp}
 }
 
@@ -164,46 +187,47 @@ func facetRange(setting Setting, facet Facet) string {
 	return fmt.Sprintf("%v_%v", setting, facet)
 }
 
-func (c *clientImpl) read(ctx context.Context, rng string) [][]interface{} {
+func (c *clientImpl) read(ctx context.Context, rng string) ([][]interface{}, error) {
 	return c.srv.Read(ctx, c.cfg.SheetId, rng)
 }
 
-func (c *clientImpl) Write(ctx context.Context, rng string, values [][]interface{}) {
-	c.srv.Write(ctx, c.cfg.SheetId, rng, values)
+func (c *clientImpl) Write(ctx context.Context, rng string, values [][]interface{}) error {
+	return c.srv.Write(ctx, c.cfg.SheetId, rng, values)
 }
 
-func (c *clientImpl) AppendOverwritingRows(ctx context.Context, rng string, values [][]interface{}) {
-	c.srv.Append(ctx, c.cfg.SheetId, rng, values)
+func (c *clientImpl) AppendOverwritingRows(ctx context.Context, rng string, values [][]interface{}) error {
+	return c.srv.Append(ctx, c.cfg.SheetId, rng, values)
 }
 
 func (c *clientImpl) LatestValues() map[Setting]string {
 	return c.latestValues
 }
 
-func (s *serviceImpl) Read(ctx context.Context, sheetId, rng string) [][]interface{} {
+func (s *serviceImpl) Read(ctx context.Context, sheetId, rng string) ([][]interface{}, error) {
 	rsp, err := s.srv.Spreadsheets.Values.
 		Get(sheetId, rng).
 		ValueRenderOption("UNFORMATTED_VALUE").
-		Do()
+		Context(ctx).Do()
 	if err != nil {
 		log.Printf("Unable to retrieve range %v from sheet: %v", rng, err)
-		return [][]interface{}{}
+		return nil, err
 	}
-	return rsp.Values
+	return rsp.Values, nil
 }
 
-func (s *serviceImpl) Write(ctx context.Context, sheetId, rng string, vals [][]interface{}) {
+func (s *serviceImpl) Write(ctx context.Context, sheetId, rng string, vals [][]interface{}) error {
 	rb := &sheets.ValueRange{Values: vals}
 	_, err := s.srv.Spreadsheets.Values.
 		Update(sheetId, rng, rb).
 		ValueInputOption("USER_ENTERED").
 		Context(ctx).Do()
 	if err != nil {
-		log.Printf("Unable to append range %v to sheet: %v", rng, err)
+		log.Printf("Unable to update range %v in sheet: %v", rng, err)
 	}
+	return err
 }
 
-func (s *serviceImpl) Append(ctx context.Context, sheetId, rng string, vals [][]interface{}) {
+func (s *serviceImpl) Append(ctx context.Context, sheetId, rng string, vals [][]interface{}) error {
 	rb := &sheets.ValueRange{Values: vals}
 	_, err := s.srv.Spreadsheets.Values.
 		Append(sheetId, rng, rb).
@@ -212,6 +236,7 @@ func (s *serviceImpl) Append(ctx context.Context, sheetId, rng string, vals [][]
 	if err != nil {
 		log.Printf("Unable to append range %v to sheet: %v", rng, err)
 	}
+	return err
 }
 
 func FormatTimestamp(t time.Time) string {

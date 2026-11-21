@@ -32,6 +32,12 @@ var (
 	ActualGridEnergyId         = ValueId{Group: 10, Number: 1, Id: 23002}
 	HeaterModeId               = ValueId{Group: 1, Number: 0, Id: 2051}
 
+	ActiveError1 = ValueId{Group: 0, Number: 0, Id: 29042}
+	ActiveError2 = ValueId{Group: 0, Number: 0, Id: 29043}
+	ActiveError3 = ValueId{Group: 0, Number: 0, Id: 29044}
+	ActiveError4 = ValueId{Group: 0, Number: 0, Id: 29045}
+	ActiveError5 = ValueId{Group: 0, Number: 0, Id: 29046}
+
 	ValueDescs = map[ValueId]ValueDesc{
 		// from Hoval docs: https://docs.google.com/spreadsheets/d/1UIvXYuhgNktCHV6-2tIfGE_4feMdR_PtWXL5rk_cBLc/edit#gid=1974512636
 		ActualOutsideTempId:       {Name: "Aussentemp. °C", Conv: vTenthsDegreesCelsius},
@@ -86,6 +92,13 @@ var (
 			"",
 			"",
 			"Vorzugsbetrieb SmartGrid"})}},
+
+		ActiveError1: {Name: "Aktiver Fehler 1", Conv: vActiveError},
+		ActiveError2: {Name: "Aktiver Fehler 2", Conv: vActiveError},
+		ActiveError3: {Name: "Aktiver Fehler 3", Conv: vActiveError},
+		ActiveError4: {Name: "Aktiver Fehler 4", Conv: vActiveError},
+		ActiveError5: {Name: "Aktiver Fehler 5", Conv: vActiveError},
+
 		{Group: 10, Number: 1, Id: 2053}: {Name: "Status Wärmeerzeugerregelung", Conv: vU8},
 		{Group: 10, Number: 1, Id: 9075}: {Name: "Betriebswahl Wärmeerzeuger", Conv: valueConverter{toValue: listParser([]string{
 			"Deakt.", "Automatik", "", "", "Heizen", "Kühlen"})}},
@@ -102,7 +115,6 @@ var (
 		{Group: 1, Number: 0, Id: 3058}:  {},
 		{Group: 1, Number: 0, Id: 7014}:  {},
 		{Group: 1, Number: 0, Id: 20125}: {},
-		{Group: 1, Number: 0, Id: 7014}:  {},
 		{Group: 2, Number: 0, Id: 503}:   {},
 		{Group: 2, Number: 0, Id: 505}:   {Name: "Bezeichnung Warmwasserprogramm Woche 1", Conv: vText},
 		{Group: 2, Number: 0, Id: 4005}:  {Name: "Funktionsbezeichnung Warmwasser 1", Conv: vText},
@@ -110,3 +122,55 @@ var (
 		{Group: 10, Number: 1, Id: 1100}: {},
 	}
 )
+
+type (
+	ActiveErrorMsg struct {
+		ShowDate       uint16
+		HideTime       uint16
+		HideDate       uint16
+		Source         uint16
+		FunctionGroup  uint8
+		FunctionNumber uint8
+		ErrorType      uint8
+		ErrorCode      uint16
+	}
+
+	ActiveError struct {
+		Msg           ActiveErrorMsg
+		ErrorTypeText string
+		ErrorCodeText string
+		SourceText    string
+	}
+)
+
+const (
+	NoShowDate = 0xff00
+	NoHideTime = 0xffff
+	NoHideDate = 0xffff
+	NoSource   = 0xffff
+	NoError    = 0x0000
+)
+
+var (
+	ErrorTypes = map[uint8]string{
+		0x00: "OK",
+		0x31: "Blockierung (temporaer)",
+		0x32: "Warnung",
+	}
+
+	ErrorCodes = map[uint16]string{
+		0x0000: "OK",
+		0xb100: "Durchfluss Kondensatorkreis (B:11)",
+	}
+
+	Sources = map[uint16]string{
+		0x3c07: "TTE-WEZ / WFA200",
+	}
+)
+
+// answer Aktiver Fehler 1 as ultrasource.activeErrorMsg{
+// ShowDate:0x300, HideTime:0xb00, HideDate:0x100,
+// Source:0x3c07, FunctionGroup:0x1c, FunctionNumber:0x1, ErrorType:0x31, ErrorCode:0xb100}
+// Fehlercode: B:11
+// Beschreibung: Durchfluss Kondensatorkreis
+// Quelle: TTE-WEZ 1 / WFA200 (WFA200)

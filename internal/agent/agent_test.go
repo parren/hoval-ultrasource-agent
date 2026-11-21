@@ -195,7 +195,7 @@ func TestUpdateAndLogValues(t *testing.T) {
 	if err := sheet.checkHave("actual_water_temp", "12.3"); err != nil {
 		t.Fatal(err)
 	}
-	if err := sheet.checkHave("actual_water_temp_lower", "34.5"); err != nil {
+	if err := sheet.checkHave("actual_water_temp_lower", "34.6"); err != nil {
 		t.Fatal(err)
 	}
 	if len(sheet.logs) > 0 {
@@ -204,10 +204,10 @@ func TestUpdateAndLogValues(t *testing.T) {
 	can.simulateFrame(mustBuildFrame(t, us.IsAnswer, us.ActualWaterTempHigherId, float32(23.45)))
 
 	time.Sleep(step)
-	if err := sheet.checkHave("actual_water_temp", "23.4"); err != nil {
+	if err := sheet.checkHave("actual_water_temp", "23.5"); err != nil {
 		t.Fatal(err)
 	}
-	if err := sheet.checkHave("actual_water_temp_lower", "34.5"); err != nil {
+	if err := sheet.checkHave("actual_water_temp_lower", "34.6"); err != nil {
 		t.Fatal(err)
 	}
 	if len(sheet.logs) > 0 {
@@ -223,10 +223,10 @@ func TestUpdateAndLogValues(t *testing.T) {
 	if len(sheet.logs) != 1 {
 		t.Fatalf("expected 1 log, but got: %v", sheet.logs)
 	}
-	if err := sheet.checkLastLog(actualWaterTempHigherIdx, "23.4"); err != nil {
+	if err := sheet.checkLastLog(actualWaterTempHigherIdx, "23.5"); err != nil {
 		t.Fatal(err)
 	}
-	if err := sheet.checkLastLog(actualWaterTempLowerIdx, "34.5"); err != nil {
+	if err := sheet.checkLastLog(actualWaterTempLowerIdx, "34.6"); err != nil {
 		t.Fatal(err)
 	}
 	can.simulateFrame(mustBuildFrame(t, us.IsAnswer, us.ActualWaterTempHigherId, float32(40)))
@@ -235,7 +235,7 @@ func TestUpdateAndLogValues(t *testing.T) {
 	if err := sheet.checkHave("actual_water_temp", "40"); err != nil {
 		t.Fatal(err)
 	}
-	if err := sheet.checkHave("actual_water_temp_lower", "34.5"); err != nil {
+	if err := sheet.checkHave("actual_water_temp_lower", "34.6"); err != nil {
 		t.Fatal(err)
 	}
 	if len(sheet.logs) != 1 {
@@ -254,7 +254,7 @@ func TestUpdateAndLogValues(t *testing.T) {
 	if err := sheet.checkLastLog(actualWaterTempHigherIdx, "40"); err != nil {
 		t.Fatal(err)
 	}
-	if err := sheet.checkLastLog(actualWaterTempLowerIdx, "34.5"); err != nil {
+	if err := sheet.checkLastLog(actualWaterTempLowerIdx, "34.6"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -407,7 +407,7 @@ func TestAutoResetLegionellaTemp_ifAlreadyLower(t *testing.T) {
 
 	parser, can := initCan()
 	sheetClient, sheet := initSheet(ctx)
-	sheet.rows["water_program"] = fakeRow{"standby", "standby", "standby", ""}
+	sheet.rows["water_program"] = fakeRow{"konstant", "konstant", "konstant", ""}
 	sheet.rows["water_temp"] = fakeRow{"10", "10>", "60", ""}
 
 	agentCfg := Config{
@@ -514,18 +514,20 @@ func (s *fakeSheet) row(name string) fakeRow {
 	return row
 }
 
-func (s *fakeSheet) Read(ctx context.Context, sheetId, rng string) [][]interface{} {
-	return [][]interface{}{s.resolve(rng)}
+func (s *fakeSheet) Read(ctx context.Context, sheetId, rng string) ([][]interface{}, error) {
+	return [][]interface{}{s.resolve(rng)}, nil
 }
 
-func (s *fakeSheet) Write(ctx context.Context, sheetId, rng string, vals [][]interface{}) {
+func (s *fakeSheet) Write(ctx context.Context, sheetId, rng string, vals [][]interface{}) error {
 	r := s.resolve(rng)
 	copy(r, vals[0])
 	log.Printf("    %v\n", s.rows)
+	return nil
 }
 
-func (s *fakeSheet) Append(ctx context.Context, sheetId, rng string, vals [][]interface{}) {
+func (s *fakeSheet) Append(ctx context.Context, sheetId, rng string, vals [][]interface{}) error {
 	s.logs = append(s.logs, fakeLog{rng: rng, row: vals[0]})
+	return nil
 }
 
 func (s *fakeSheet) simulateUser(n string, v string) {

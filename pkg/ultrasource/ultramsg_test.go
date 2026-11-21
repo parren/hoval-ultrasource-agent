@@ -32,6 +32,40 @@ var buildAndParseFrameTests = []test{
 	{"1FE00801#014000000000", IsQuery, ActualOutsideTempId, nil},
 }
 
+func TestBuildFrame_RoundsTenths(t *testing.T) {
+	f, err := BuildFrame(IsAnswer, ActualOutsideTempId, float32(34.56))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	p := NewParser(Config{})
+	m, err := p.ParseFrame(f)
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if m.Value != float32(34.6) {
+		t.Fatalf("got %v, want 34.6", m.Value)
+	}
+}
+
+func TestParseFrame_MalformedReturnsErrorWithoutPanic(t *testing.T) {
+	p := NewParser(Config{})
+	badFrames := []can.Frame{
+		{ID: 0x1fc00fff, IsExtended: true, Length: 0},                                                 // length < 2
+		{ID: 0x1fc00fff, IsExtended: true, Length: 3, Data: [8]byte{0x01, byte(IsAnswer), 0x00}},      // short header
+		{ID: 0x1fc00fff, IsExtended: true, Length: 6, Data: [8]byte{0x01, byte(IsAnswer), 0, 0, 0, 0}}, // short temp (0 bytes)
+		{ID: 0x1fc00fff, IsExtended: true, Length: 7, Data: [8]byte{0x01, byte(IsAnswer), 0, 0, 0, 0, 0x01}}, // short temp (1 byte)
+		{ID: 0x1fc00fff, IsExtended: true, Length: 6, Data: [8]byte{0x01, byte(IsAnswer), 10, 1, 0x08, 0x21}}, // short hours
+		{ID: 0x1fc00fff, IsExtended: true, Length: 6, Data: [8]byte{0x01, byte(IsAnswer), 10, 1, 0x4e, 0x54}}, // short percent
+		{ID: 0x1fc00fff, IsExtended: true, Length: 6, Data: [8]byte{0x01, byte(IsAnswer), 1, 0, 0x0b, 0xea}},  // empty list payload
+		{ID: 0x01c00fff, IsExtended: true, Length: 0},                                                 // empty continuation
+	}
+	for i, f := range badFrames {
+		if _, err := p.ParseFrame(f); err == nil {
+			t.Errorf("case %d (%v): expected error, got nil", i, f)
+		}
+	}
+}
+
 var parseOnlyFrameTests = []test{
 	{"1FC00FFF#014201000BEA01", IsAnswer, HeatingProgramId, "Woche 1"},
 	{"1FC00FFF#014201000BEA02", IsAnswer, HeatingProgramId, "Woche 2"},

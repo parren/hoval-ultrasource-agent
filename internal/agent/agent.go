@@ -145,7 +145,10 @@ func updateCurrentSettingsForever(ctx context.Context, msgs <-chan settingAnswer
 				sheet.RefreshFluctuatingHaveValue(ctx, fv)
 			}
 			if m.set.isDesired {
-				vs := sheet.ReadSettingValues(ctx, s)
+				vs, err := sheet.ReadSettingValues(ctx, s)
+				if err != nil {
+					continue
+				}
 				if vs.Want == vs.Have && vs.Sent != vs.Have {
 					sheet.WriteFacetValue(ctx, gs.FacetValue{Setting: s, Facet: gs.Sent, Value: vs.Have})
 				}
@@ -183,7 +186,10 @@ func updateDesiredSettingsForever(ctx context.Context, sheet gs.Client, xmit us.
 func applyDesiredSettings(ctx context.Context, sheet gs.Client, xmit us.Transmitter, cfg Config) {
 	log.Println("Polling for changed desired settings")
 	for _, s := range PushedSettings {
-		vs := sheet.ReadSettingValues(ctx, s.SheetSetting)
+		vs, err := sheet.ReadSettingValues(ctx, s.SheetSetting)
+		if err != nil {
+			continue
+		}
 		if vs.Want != vs.Have {
 			if vs.Want == vs.Sent {
 				log.Printf("Picking up value changed externally: %v\n", vs)
@@ -237,13 +243,19 @@ func applyAutomaticWaterTemperatureSetting(ctx context.Context, sheet gs.Client,
 		return
 	}
 
-	vs := sheet.ReadSettingValues(ctx, gs.WaterProgram)
+	vs, err := sheet.ReadSettingValues(ctx, gs.WaterProgram)
+	if err != nil {
+		return
+	}
 	if vs.Want != WaterProgramConstant {
 		log.Printf("Water program is not set to constant, but %v\n", vs.Want)
 		return
 	}
 
-	vs = sheet.ReadSettingValues(ctx, gs.DesiredWaterTemp)
+	vs, err = sheet.ReadSettingValues(ctx, gs.DesiredWaterTemp)
+	if err != nil {
+		return
+	}
 	celsius, err := strconv.ParseFloat(vs.Want, 32)
 	if err != nil {
 		log.Printf("Failed to parse desired water temp: %v\n", vs.Want)

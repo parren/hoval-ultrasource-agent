@@ -7,7 +7,6 @@ import (
 
 	"go.einride.tech/can"
 	"go.einride.tech/can/pkg/socketcan"
-	_ "periph.io/x/host/v3/rpi"
 )
 
 type Transmitter interface {

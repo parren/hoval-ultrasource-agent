@@ -24,8 +24,11 @@ func (m *flagMap) String() string {
 }
 
 func (m *flagMap) Set(value string) error {
-	kv := strings.Split(value, ":")
-	(*m)[kv[0]] = kv[1]
+	k, v, ok := strings.Cut(value, ":")
+	if !ok || k == "" || v == "" {
+		return fmt.Errorf("expected id:name format, got %q", value)
+	}
+	(*m)[k] = v
 	return nil
 }
 
