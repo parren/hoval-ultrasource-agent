@@ -111,12 +111,21 @@ func main() {
 	var parser *ultrasource.Parser
 	var can ultrasource.Client
 	if enableCanBus {
+		var err error
 		parser = ultrasource.NewParser(parserCfg)
-		can = ultrasource.NewClient(ctx)
+		can, err = ultrasource.NewClient(ctx)
+		if err != nil {
+			log.Fatalf("Unable to dial can0: %v", err)
+		}
+		defer can.Close()
 	}
 	var sensors temperature.Client
 	if enableOnewireBus {
-		sensors = temperature.NewClient()
+		var err error
+		sensors, err = temperature.NewClient()
+		if err != nil {
+			log.Fatalf("Unable to init 1-wire temperature client: %v", err)
+		}
 	}
 
 	if heartbeatFile != "" {

@@ -600,6 +600,9 @@ func (c *fakeCan) Frame() can.Frame {
 	return f
 }
 
+func (c *fakeCan) Reconnect(ctx context.Context) error { return nil }
+func (c *fakeCan) Close() error                        { return nil }
+
 func (c *fakeCan) simulateFrame(f can.Frame) {
 	log.Printf("        Simulating %v\n", f)
 	c.lock.Lock()

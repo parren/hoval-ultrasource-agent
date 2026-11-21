@@ -39,15 +39,12 @@ func RunForever(ctx context.Context, sheet gs.Client, parser *us.Parser, can us.
 	if cfg.UpdateCurrentSettings {
 		log.Println("Updating current settings in sheet from messages")
 		if cfg.SettingsQueryInterval > 0 {
-			go queryCurrentSettingsForever(ctx, can, sensors, cfg)
+			go queryCurrentSettingsForever(ctx, can, sensors, sheet, cfg)
 		}
-		if cfg.CanPollingInterval > 0 {
+		if cfg.CanPollingInterval > 0 && can != nil {
 			go receiveAnswerMessagesForever(ctx, can, parser, answerMsgs, cfg)
 		}
 		go updateCurrentSettingsForever(ctx, answerMsgs, sheet, cfg)
-		if sensors != nil {
-			go updateSensorReadingsForever(ctx, sensors.TemperatureReadings(), sheet, cfg)
-		}
 		if cfg.LogCurrentSettingsToSheet {
 			go logCurrentSettingsToSheetForever(ctx, sheet, cfg, sensorNames)
 		}
@@ -76,7 +73,7 @@ type settingAnswerMessage struct {
 	set Setting
 }
 
-func queryCurrentSettingsForever(ctx context.Context, xmit us.Transmitter, sensors temp.Client, cfg Config) {
+func queryCurrentSettingsForever(ctx context.Context, xmit us.Transmitter, sensors temp.Client, sheet gs.Client, cfg Config) {
 	runThenTick(ctx, cfg.SettingsQueryInterval, func() {
 		if xmit != nil {
 			log.Println("Querying current settings")
@@ -98,16 +95,30 @@ func queryCurrentSettingsForever(ctx context.Context, xmit us.Transmitter, senso
 			log.Println("Querying current sensor readings")
 			for id, name := range cfg.TemperatureSensors {
 				log.Printf("Reading sensor %v: %v\n", name, id)
-				sensors.RequestTemp(id)
+				t, err := sensors.ReadTemp(id)
+				if err != nil {
+					log.Printf("Failed to read sensor %v: %v\n", id, err)
+					continue
+				}
+				fv := gs.FacetValue{Setting: gs.Setting(name), Facet: gs.Have, Value: fmt.Sprintf("%v", t)}
+				sheet.RefreshFluctuatingHaveValue(ctx, fv)
 			}
 		}
 	})
 }
 
-func receiveAnswerMessagesForever(ctx context.Context, recv us.Receiver, parser *us.Parser,
+func receiveAnswerMessagesForever(ctx context.Context, recv us.Client, parser *us.Parser,
 	out chan<- settingAnswerMessage, cfg Config,
 ) {
+	first := true
 	runThenTick(ctx, cfg.CanPollingInterval, func() {
+		if !first {
+			if err := recv.Reconnect(ctx); err != nil {
+				log.Printf("Failed to reconnect CAN bus: %v\n", err)
+				return
+			}
+		}
+		first = false
 		log.Println("Polling CAN frames")
 		for recv.Receive() {
 			f := recv.Frame()
@@ -153,23 +164,6 @@ func updateCurrentSettingsForever(ctx context.Context, msgs <-chan settingAnswer
 					sheet.WriteFacetValue(ctx, gs.FacetValue{Setting: s, Facet: gs.Sent, Value: vs.Have})
 				}
 			}
-		}
-	}
-}
-
-func updateSensorReadingsForever(ctx context.Context, readings <-chan temp.TemperatureReading, sheet gs.Client, cfg Config) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case r := <-readings:
-			if r.Error != nil {
-				log.Printf("Failed to read sensor %v: %v\n", r.Id, r.Error)
-				continue
-			}
-			name := cfg.TemperatureSensors[r.Id]
-			fv := gs.FacetValue{Setting: gs.Setting(name), Facet: gs.Have, Value: fmt.Sprintf("%v", r.Temperature)}
-			sheet.RefreshFluctuatingHaveValue(ctx, fv)
 		}
 	}
 }
