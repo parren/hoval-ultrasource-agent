@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/parren/hoval-ultrasource-agent/internal/agent"
+	"github.com/parren/hoval-ultrasource-agent/pkg/agent"
 	"github.com/parren/hoval-ultrasource-agent/pkg/googlesheet"
 	"github.com/parren/hoval-ultrasource-agent/pkg/temperature"
 	"github.com/parren/hoval-ultrasource-agent/pkg/ultrasource"

@@ -174,8 +174,8 @@ func TestUpdateAndLogValues(t *testing.T) {
 	if err := sheet.checkHave("actual_water_temp_lower", ""); err != nil {
 		t.Fatal(err)
 	}
-	if len(sheet.logs) > 0 {
-		t.Fatalf("expected no logs, but got: %v", sheet.logs)
+	if sheet.logCount() > 0 {
+		t.Fatalf("expected no logs, but got: %v", sheet.logCount())
 	}
 	can.simulateFrame(mustBuildFrame(t, us.IsAnswer, us.ActualWaterTempHigherId, float32(12.34)))
 
@@ -186,8 +186,8 @@ func TestUpdateAndLogValues(t *testing.T) {
 	if err := sheet.checkHave("actual_water_temp_lower", ""); err != nil {
 		t.Fatal(err)
 	}
-	if len(sheet.logs) > 0 {
-		t.Fatalf("expected no logs yet, but got: %v", sheet.logs)
+	if sheet.logCount() > 0 {
+		t.Fatalf("expected no logs yet, but got: %v", sheet.logCount())
 	}
 	can.simulateFrame(mustBuildFrame(t, us.IsAnswer, us.ActualWaterTempLowerId, float32(34.56)))
 
@@ -198,8 +198,8 @@ func TestUpdateAndLogValues(t *testing.T) {
 	if err := sheet.checkHave("actual_water_temp_lower", "34.6"); err != nil {
 		t.Fatal(err)
 	}
-	if len(sheet.logs) > 0 {
-		t.Fatalf("expected no logs yet, but got: %v", sheet.logs)
+	if sheet.logCount() > 0 {
+		t.Fatalf("expected no logs yet, but got: %v", sheet.logCount())
 	}
 	can.simulateFrame(mustBuildFrame(t, us.IsAnswer, us.ActualWaterTempHigherId, float32(23.45)))
 
@@ -210,18 +210,18 @@ func TestUpdateAndLogValues(t *testing.T) {
 	if err := sheet.checkHave("actual_water_temp_lower", "34.6"); err != nil {
 		t.Fatal(err)
 	}
-	if len(sheet.logs) > 0 {
-		t.Fatalf("expected no logs yet, but got: %v", sheet.logs)
+	if sheet.logCount() > 0 {
+		t.Fatalf("expected no logs yet, but got: %v", sheet.logCount())
 	}
 
 	time.Sleep(logDelay - time.Since(start) - step)
-	if len(sheet.logs) > 0 {
-		t.Fatalf("expected no logs yet, but got: %v", sheet.logs)
+	if sheet.logCount() > 0 {
+		t.Fatalf("expected no logs yet, but got: %v", sheet.logCount())
 	}
 
 	time.Sleep(logDelay - time.Since(start) + step)
-	if len(sheet.logs) != 1 {
-		t.Fatalf("expected 1 log, but got: %v", sheet.logs)
+	if sheet.logCount() != 1 {
+		t.Fatalf("expected 1 log, but got: %v", sheet.logCount())
 	}
 	if err := sheet.checkLastLog(actualWaterTempHigherIdx, "23.5"); err != nil {
 		t.Fatal(err)
@@ -238,18 +238,18 @@ func TestUpdateAndLogValues(t *testing.T) {
 	if err := sheet.checkHave("actual_water_temp_lower", "34.6"); err != nil {
 		t.Fatal(err)
 	}
-	if len(sheet.logs) != 1 {
-		t.Fatalf("expected 1 log, but got: %v", sheet.logs)
+	if sheet.logCount() != 1 {
+		t.Fatalf("expected 1 log, but got: %v", sheet.logCount())
 	}
 
 	time.Sleep(logDelay + logInterval - time.Since(start) - step)
-	if len(sheet.logs) != 1 {
-		t.Fatalf("expected 1 logs, but got: %v", sheet.logs)
+	if sheet.logCount() != 1 {
+		t.Fatalf("expected 1 logs, but got: %v", sheet.logCount())
 	}
 
 	time.Sleep(logDelay + logInterval - time.Since(start) + step)
-	if len(sheet.logs) != 2 {
-		t.Fatalf("expected 2 logs, but got: %v", sheet.logs)
+	if sheet.logCount() != 2 {
+		t.Fatalf("expected 2 logs, but got: %v", sheet.logCount())
 	}
 	if err := sheet.checkLastLog(actualWaterTempHigherIdx, "40"); err != nil {
 		t.Fatal(err)
@@ -448,8 +448,13 @@ type (
 	}
 
 	fakeSheet struct {
+		lock sync.Mutex
 		rows map[string]fakeRow
 		logs []fakeLog
+	}
+
+	fakeTemp struct {
+		temps map[string]float32
 	}
 
 	fakeCan struct {
@@ -514,19 +519,94 @@ func (s *fakeSheet) row(name string) fakeRow {
 	return row
 }
 
+func (f fakeTemp) ReadTemp(id string) (float32, error) {
+	return f.temps[id], nil
+}
+
+func TestOnReadingsAndSyncSensors(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	sheetClient, sheet := initSheet(ctx)
+	gotCh := make(chan struct {
+		header []interface{}
+		row    []interface{}
+	}, 4)
+
+	cfg := Config{
+		UpdateCurrentSettings:      true,
+		LogCurrentSettingsToFiles:  true,
+		SettingsQueryInterval:      step * 20,
+		SettingsLogToFilesInterval: step * 20,
+		SettingsLogDelay:           step,
+		TemperatureSensors:         map[string]string{"id-5m": "temp5m", "id-1m": "temp1m"},
+		OnReadings: func(now time.Time, header, row []interface{}) error {
+			gotCh <- struct {
+				header []interface{}
+				row    []interface{}
+			}{header: header, row: row}
+			return nil
+		},
+	}
+	sensors := fakeTemp{temps: map[string]float32{"id-1m": 19.5, "id-5m": 21.25}}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		RunForever(ctx, sheetClient, nil, nil, sensors, cfg)
+	}()
+
+	select {
+	case got := <-gotCh:
+		n := len(got.header)
+		if n != len(ReportedSettings)+2 {
+			t.Fatalf("header len = %d, want %d", n, len(ReportedSettings)+2)
+		}
+		if got.header[n-2] != "temp1m" || got.header[n-1] != "temp5m" {
+			t.Fatalf("unexpected sorted sensor headers: %v, %v", got.header[n-2], got.header[n-1])
+		}
+		if got.row[n-2] != "19.5" || got.row[n-1] != "21.25" {
+			t.Fatalf("unexpected sensor values: %v, %v", got.row[n-2], got.row[n-1])
+		}
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for OnReadings callback")
+	}
+
+	if err := sheet.checkHave("temp1m", "19.5"); err != nil {
+		t.Fatal(err)
+	}
+	if err := sheet.checkHave("temp5m", "21.25"); err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+	<-done
+}
+
 func (s *fakeSheet) Read(ctx context.Context, sheetId, rng string) ([][]interface{}, error) {
-	return [][]interface{}{s.resolve(rng)}, nil
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	src := s.resolve(rng)
+	cp := make([]interface{}, len(src))
+	copy(cp, src)
+	return [][]interface{}{cp}, nil
 }
 
 func (s *fakeSheet) BatchRead(ctx context.Context, sheetId string, ranges []string) ([][][]interface{}, error) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
 	res := make([][][]interface{}, len(ranges))
 	for i, rng := range ranges {
-		res[i] = [][]interface{}{s.resolve(rng)}
+		src := s.resolve(rng)
+		cp := make([]interface{}, len(src))
+		copy(cp, src)
+		res[i] = [][]interface{}{cp}
 	}
 	return res, nil
 }
 
 func (s *fakeSheet) Write(ctx context.Context, sheetId, rng string, vals [][]interface{}) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
 	r := s.resolve(rng)
 	copy(r, vals[0])
 	log.Printf("    %v\n", s.rows)
@@ -534,6 +614,8 @@ func (s *fakeSheet) Write(ctx context.Context, sheetId, rng string, vals [][]int
 }
 
 func (s *fakeSheet) BatchWrite(ctx context.Context, sheetId string, updates []gs.RangeValues) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
 	for _, u := range updates {
 		r := s.resolve(u.Range)
 		copy(r, u.Values[0])
@@ -543,15 +625,29 @@ func (s *fakeSheet) BatchWrite(ctx context.Context, sheetId string, updates []gs
 }
 
 func (s *fakeSheet) Append(ctx context.Context, sheetId, rng string, vals [][]interface{}) error {
-	s.logs = append(s.logs, fakeLog{rng: rng, row: vals[0]})
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	cp := make(fakeRow, len(vals[0]))
+	copy(cp, vals[0])
+	s.logs = append(s.logs, fakeLog{rng: rng, row: cp})
 	return nil
 }
 
 func (s *fakeSheet) simulateUser(n string, v string) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
 	s.rows[n][cellUser] = v
 }
 
+func (s *fakeSheet) logCount() int {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return len(s.logs)
+}
+
 func (s *fakeSheet) checkHave(n string, want string) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
 	r := s.rows[n]
 	if len(r) <= int(cellHave) {
 		return fmt.Errorf("%v[%v] should be %v, is %v", n, cellHave, want, r)
@@ -563,6 +659,8 @@ func (s *fakeSheet) checkHave(n string, want string) error {
 }
 
 func (s *fakeSheet) checkRowStart(n string, wantRow fakeRow) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
 	r := s.rows[n]
 	if len(r) < len(wantRow) {
 		return fmt.Errorf("%v should start with %v, is %v", n, wantRow, r)
@@ -576,6 +674,8 @@ func (s *fakeSheet) checkRowStart(n string, wantRow fakeRow) error {
 }
 
 func (s *fakeSheet) checkLastLog(i logCell, want string) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
 	log := s.logs[len(s.logs)-1]
 	if have := log.row[i]; have != want {
 		return fmt.Errorf("expected %v at %v, but got %v in %v", want, i, have, log.row)
