@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"go.einride.tech/can"
-	gs "parren.ch/ultrasource/pkg/googlesheet"
-	us "parren.ch/ultrasource/pkg/ultrasource"
+	gs "github.com/parren/hoval-ultrasource-agent/pkg/googlesheet"
+	us "github.com/parren/hoval-ultrasource-agent/pkg/ultrasource"
 )
 
 const tick = time.Millisecond

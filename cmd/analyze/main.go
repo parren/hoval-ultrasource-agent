@@ -8,7 +8,7 @@ import (
 	"regexp"
 
 	"go.einride.tech/can"
-	"parren.ch/ultrasource/pkg/ultrasource"
+	"github.com/parren/hoval-ultrasource-agent/pkg/ultrasource"
 )
 
 var (

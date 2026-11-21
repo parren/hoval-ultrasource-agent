@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"parren.ch/ultrasource/internal/agent"
-	"parren.ch/ultrasource/pkg/googlesheet"
-	"parren.ch/ultrasource/pkg/temperature"
-	"parren.ch/ultrasource/pkg/ultrasource"
+	"github.com/parren/hoval-ultrasource-agent/internal/agent"
+	"github.com/parren/hoval-ultrasource-agent/pkg/googlesheet"
+	"github.com/parren/hoval-ultrasource-agent/pkg/temperature"
+	"github.com/parren/hoval-ultrasource-agent/pkg/ultrasource"
 )
 
 const defaultLogInterval = time.Hour

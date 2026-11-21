@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"go.einride.tech/can/pkg/socketcan"
-	us "parren.ch/ultrasource/pkg/ultrasource"
+	us "github.com/parren/hoval-ultrasource-agent/pkg/ultrasource"
 )
 
 const (

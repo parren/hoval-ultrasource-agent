@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/vishalkuo/bimap"
 	"go.einride.tech/can"
-	gs "parren.ch/ultrasource/pkg/googlesheet"
-	us "parren.ch/ultrasource/pkg/ultrasource"
+	gs "github.com/parren/hoval-ultrasource-agent/pkg/googlesheet"
+	us "github.com/parren/hoval-ultrasource-agent/pkg/ultrasource"
 )
 
 type Setting struct {
@@ -131,17 +130,20 @@ var celsius = converter{
 	}}
 
 func strMap(valueByValue map[string]string) *converter {
-	bm := bimap.NewBiMapFromMap(valueByValue)
+	inverse := make(map[string]string, len(valueByValue))
+	for k, v := range valueByValue {
+		inverse[v] = k
+	}
 	return &converter{
 		ParseMessage: func(m us.Message) (string, bool) {
 			v := fmt.Sprintf("%v", m.Value)
-			if s, ok := bm.Get(v); ok {
+			if s, ok := valueByValue[v]; ok {
 				v = s
 			}
 			return v, true
 		},
 		MakeUpdateFrame: func(v string, vid us.ValueId) (f can.Frame, err error) {
-			if s, ok := bm.GetInverse(v); ok {
+			if s, ok := inverse[v]; ok {
 				v = s
 			}
 			f, err = us.BuildFrame(us.IsSet, vid, v)

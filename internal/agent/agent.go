@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"time"
 
-	gs "parren.ch/ultrasource/pkg/googlesheet"
-	"parren.ch/ultrasource/pkg/logfiles"
-	temp "parren.ch/ultrasource/pkg/temperature"
-	us "parren.ch/ultrasource/pkg/ultrasource"
+	gs "github.com/parren/hoval-ultrasource-agent/pkg/googlesheet"
+	"github.com/parren/hoval-ultrasource-agent/pkg/logfiles"
+	temp "github.com/parren/hoval-ultrasource-agent/pkg/temperature"
+	us "github.com/parren/hoval-ultrasource-agent/pkg/ultrasource"
 )
 
 type Config struct {
